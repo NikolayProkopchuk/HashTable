@@ -2,91 +2,92 @@ package com.prokopchuk.hashtable;
 
 import java.util.Objects;
 
-public class HashTable<T> {
+public class HashTable<K, V> {
 
     public static void main(String[] args) {
-        HashTable<String> hashTable = new HashTable<>();
-        hashTable.add("Stas");
-        hashTable.add("Taras");
-        hashTable.add("Nikolas");
-        hashTable.add("Alexiy");
-        hashTable.add("Ivan");
-        hashTable.add("Maxim");
-        hashTable.add("Ihor");
-        hashTable.add("Kiril");
-        hashTable.add("Vitaliy");
-        hashTable.add("Dmitriy");
-        hashTable.add("Sergiy");
-        hashTable.add("Vladimir");
-        hashTable.add("Petr");
-        hashTable.add("Miroslav");
-        hashTable.add("Nikolas");
+        HashTable<String, String> hashTable = new HashTable<>();
+        hashTable.put("Stas", "stas@test.com");
+        hashTable.put("Taras", "taras@test.com");
+        hashTable.put("Nikolas", "nikolas@test.com");
+        hashTable.put("Alexiy", "Alexiy@test.com");
+        hashTable.put("Ivan", "Ivan@test.com");
+        hashTable.put("Maxim", "Maxim@test.com");
+        hashTable.put("Ihor", "Ihor@test.com");
+        hashTable.put("Kiril", "Kiril@test.com");
+        hashTable.put("Vitaliy", "Vitaliy@test.com");
+        hashTable.put("Dmitriy", "Dmitriy@test.com");
+        hashTable.put("Sergiy", "Sergiy@test.com");
+        hashTable.put("Vladimir", "Vladimir@test.com");
+        hashTable.put("Petr", "Petr@test.com");
+        hashTable.put("Miroslav", "Miroslav@test.com");
+        hashTable.put("Nikolas", "NewNikolas@test.com");
 
         System.out.println(hashTable.tableToString());
     }
 
-    private int numberOfBuckets = 8;
-    private final int loadFactor = 2;
-    private int load;
+    private int numberOfBuckets = 16;
+    private int size;
     @SuppressWarnings({"uchecked", "rawType"})
-    private Node<T>[] buckets = new Node[numberOfBuckets];
+    private Node<K, V>[] buckets = new Node[numberOfBuckets];
 
     /**
      * Adds an element to the hash table. Does not support duplicate elements.
      *
-     * @param element
+     * @param key
+     * @param value
      * @return true if it was added
      */
-    public boolean add(T element) {
-        Objects.requireNonNull(element);
-        var elementNode = new Node<>(element);
-
-        return putNodeIntoBucket(elementNode, this.buckets);
+    public V put(K key, V value) {
+        Objects.requireNonNull(key);
+        int position = hash(key, buckets.length);
+        var node = findByKey(buckets[position], key);
+        V oldValue = null;
+        if (node != null) {
+            oldValue = node.value;
+            node.value = value;
+        } else {
+            putNodeIntoBucket(new Node<>(key, value), buckets, position);
+            size++;
+            if (size >= numberOfBuckets) {
+                numberOfBuckets *= 2;
+                resize(numberOfBuckets);
+            }
+        }
+        return oldValue;
     }
 
-    private boolean putNodeIntoBucket(Node<T> elementNode, Node<T>[] buckets) {
-        int position = hash(elementNode.element, buckets.length);
+    private void putNodeIntoBucket(Node<K, V> node, Node<K, V>[] buckets, int position) {
         var head = buckets[position];
 
         if (head == null) {
-            buckets[position] = elementNode;
-        } else if (!contains(head, elementNode.element)) {
-            appendNode(head, elementNode);
+            buckets[position] = node;
         } else {
-            return false;
+            appendNode(head, node);
         }
-        if (load > loadFactor) {
-            numberOfBuckets *= 2;
-            resize(numberOfBuckets);
-        }
-        return true;
     }
 
-    private void appendNode(Node<T> head, Node<T> node) {
+    private void appendNode(Node<K,V> head, Node<K, V> node) {
         var current = head;
-        int bucketSize =1;
         while (current.next != null) {
             current = current.next;
-            bucketSize++;
         }
         current.next = node;
-        load = Math.max(load, bucketSize);
     }
 
-    private int hash(T element, int numberOfBuckets) {
-        return Math.abs(element.hashCode() % numberOfBuckets);
+    private int hash(K key, int numberOfBuckets) {
+        return Math.abs(key.hashCode() % numberOfBuckets);
     }
 
-    private boolean contains(Node<T> head, T element) {
+    private Node<K, V> findByKey(Node<K, V> head, K key) {
         var currentNode = head;
         while (currentNode != null) {
-            if (currentNode.element.equals(element)) {
-                return true;
+            if (currentNode.key.equals(key)) {
+                return currentNode;
             }
             currentNode = currentNode.next;
         }
 
-        return false;
+        return null;
     }
 
     /**
@@ -109,11 +110,11 @@ public class HashTable<T> {
         return builder.toString();
     }
 
-    private String bucketToString(Node<T> head) {
+    private String bucketToString(Node<K, V> head) {
         StringBuilder builder = new StringBuilder();
         var current = head;
         while (current != null) {
-            builder.append(current.element);
+            builder.append(String.format("%s:%s", current.key, current.value));
             current = current.next;
             if (current != null) {
                 builder.append(" -> ");
@@ -123,9 +124,8 @@ public class HashTable<T> {
     }
 
     private void resize(int newSize) {
-        load = 0;
         @SuppressWarnings({"uchecked", "rawType"})
-        Node<T>[] newBuckets = new Node[newSize];
+        Node<K, V>[] newBuckets = new Node[newSize];
 
         for (var head : buckets) {
             rearrangeBucketElements(head, newBuckets);
@@ -134,21 +134,24 @@ public class HashTable<T> {
         buckets = newBuckets;
     }
 
-    private void rearrangeBucketElements(Node<T> element, Node<T>[] newBucket) {
-        while (element != null) {
-            putNodeIntoBucket(element, newBucket);
-            var previous = element;
-            element = previous.next;
+    private void rearrangeBucketElements(Node<K, V> node, Node<K, V>[] newBucket) {
+        while (node != null) {
+            int position = hash(node.key, numberOfBuckets);
+            putNodeIntoBucket(node, newBucket, position);
+            var previous = node;
+            node = previous.next;
             previous.next = null;
         }
     }
 
-    private class Node<E> {
-        private final E element;
-        private Node<E> next;
+    private class Node<K, V> {
+        private final K key;
+        private V value;
+        private Node<K, V> next;
 
-        public Node(E element) {
-            this.element = element;
+        public Node(K key, V value) {
+            this.key = key;
+            this.value = value;
         }
     }
 }
